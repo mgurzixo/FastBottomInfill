@@ -1,4 +1,4 @@
-# Cura Slow Z
+## Fast Bottom Infill
 
 This Plugin is plagiarized from an initial existing Cura Plugin : [Cura-Slow-Z](https://github.com/5axes/Cura-Slow-Z) by [5axes](https://github.com/5axes)
 
