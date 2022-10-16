@@ -60,15 +60,15 @@ class FastBottomInfill(Extension):
 
         self._settings_dict = OrderedDict()
         self._settings_dict["fbi_enable"] = {
-            "label": "Enable Bottom Layers Infill",
-            "description": "Activate Bottom Layers Infill",
+            "label": "Enable Bottom Layers Speed Adjust",
+            "description": "Enable Bottom Layers Speed Adjustments",
             "type": "bool",
             "default_value": False,
             "settable_per_mesh": False,
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        self._settings_dict["fbi0_speed"] = {
+        self._settings_dict["fbi0Speed"] = {
             "label": "Initial Layer Infill Speed",
             "description": "Initial Layer Infill Speed.",
             "type": "float",
@@ -81,7 +81,20 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        self._settings_dict["fbi_speed"] = {
+        self._settings_dict["wbi0Speed"] = {
+            "label": "Initial Layer Wall Speed",
+            "description": "Initial Layer Wall Speed.",
+            "type": "float",
+            "unit": "mm/s",
+            "default_value": 50,
+            "minimum_value": "10",
+            "maximum_value_warning": "200",
+            "enabled": "fbi_enable",
+            "settable_per_mesh": False,
+            "settable_per_extruder": False,
+            "settable_per_meshgroup": False
+        }
+        self._settings_dict["fbiSpeed"] = {
             "label": "Bottom Layers Infill Speed",
             "description": "Bottom Layers Infill Speed.",
             "type": "float",
@@ -122,13 +135,14 @@ class FastBottomInfill(Extension):
         speed_category = container.findDefinitions(key="speed")
         fbi_enable = container.findDefinitions(
             key=list(self._settings_dict.keys())[0])
-        fbi0_speed = container.findDefinitions(
+        fbi0Speed = container.findDefinitions(
             key=list(self._settings_dict.keys())[1])
-        fbi_speed = container.findDefinitions(
+        wbi0Speed = container.findDefinitions(
             key=list(self._settings_dict.keys())[2])
-        # slowz_height = container.findDefinitions(key=list(self._settings_dict.keys())[2])
+        fbiSpeed = container.findDefinitions(
+            key=list(self._settings_dict.keys())[3])
 
-        if speed_category and not fbi_speed:
+        if speed_category and not fbiSpeed and not fbi0Speed and not wbi0Speed:
             speed_category = speed_category[0]
             for setting_key, setting_dict in self._settings_dict.items():
 
@@ -149,12 +163,10 @@ class FastBottomInfill(Extension):
             return
 
         # get setting from Cura
-        fbi0_speed = global_container_stack.getProperty("fbi0_speed", "value")
-        fbi_speed = global_container_stack.getProperty("fbi_speed", "value")
+        fbi0Speed = global_container_stack.getProperty("fbi0Speed", "value")
+        wbi0Speed = global_container_stack.getProperty("wbi0Speed", "value")
+        fbiSpeed = global_container_stack.getProperty("fbiSpeed", "value")
         fbi_enable = global_container_stack.getProperty("fbi_enable", "value")
-
-        if fbi_speed <= 0 or fbi0_speed <= 0:
-            return
 
         if not fbi_enable:
             return
@@ -177,8 +189,9 @@ class FastBottomInfill(Extension):
                 layercount = 0
                 currentlayer = 0
                 idl = 0  # Start
-                doPatch = 0
-                doPatch0 = 0
+                doPatchF = 0
+                doPatchF0 = 0
+                doPatchW0 = 0
                 if ";LAYER_COUNT:" in gcode_list[1]:
                     if ";LAYER:0\n" in gcode_list[1]:
                         # layer 0 somehow got appended to the start gcode chunk
@@ -205,29 +218,44 @@ class FastBottomInfill(Extension):
                             if idl == 1 and line.startswith(";TYPE:FILL"):
                                 idl = 2
 
+                            # Initial Layer
                             if idl == 0:
-                                if line.startswith(";TYPE:SKIN"):
-                                    doPatch0 = 1
+                                if line.startswith(";TYPE:SKIN") and fbi0Speed > 0:
+                                    doPatchF0 = 1
                                 elif line.startswith(";TYPE:"):
-                                    doPatch0 = 0
+                                    doPatchF0 = 0
 
-                                if doPatch0 == 1:
+                                if (line.startswith(";TYPE:WALL-INNER") or line.startswith(";TYPE:WALL-OUTER")) and wbi0Speed > 0:
+                                    doPatchW0 = 1
+                                elif line.startswith(";TYPE:"):
+                                    doPatchW0 = 0
+
+                                # Initial Infill
+                                if doPatchF0 == 1:
                                     if line.startswith("G1 F"):
                                         res = re.sub(
-                                            'G1 F[0-9]+', 'G1 F'+str(fbi0_speed * 60), line)
+                                            'G1 F[0-9.]+', 'G1 F'+str(fbi0Speed * 60), line)
                                         lines[line_nr] = res
 
-                            if idl == 1:
-                                if line.startswith(";TYPE:SKIN"):
-                                    doPatch = 1
-                                    lines
-                                elif line.startswith(";TYPE:"):
-                                    doPatch = 0
-
-                                if doPatch == 1:
+                                # Initial Walls
+                                if doPatchW0 == 1:
                                     if line.startswith("G1 F"):
                                         res = re.sub(
-                                            'G1 F[0-9]+', 'G1 F'+str(fbi_speed * 60), line)
+                                            'G1 F[0-9.]+', 'G1 F'+str(wbi0Speed * 60), line)
+                                        lines[line_nr] = res
+
+                            # Other bottom layers
+                            if idl == 1:
+                                if line.startswith(";TYPE:SKIN") and fbiSpeed > 0:
+                                    doPatchF = 1
+                                    lines
+                                elif line.startswith(";TYPE:"):
+                                    doPatchF = 0
+
+                                if doPatchF == 1:
+                                    if line.startswith("G1 F"):
+                                        res = re.sub(
+                                            'G1 F[0-9.]+', 'G1 F'+str(fbiSpeed * 60), line)
                                         lines[line_nr] = res
 
                         gcode_list[i] = "\n".join(lines)
