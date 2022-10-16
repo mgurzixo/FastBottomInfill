@@ -1,4 +1,4 @@
-#------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------
 # Initial Copyright(c) 2020 Shane Bumpurs  (VMaxx ?)
 #
 # All modification after 05/2022 Copyright(c) 2022 5@xes
@@ -9,11 +9,11 @@
 #
 # Description:  postprocessing script to force bottom infill speed
 #
-#------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------
 #
 #   Version 1.0.0  16/10/2022 Initial version
 #
-#------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------
 
 import re
 from collections import OrderedDict
@@ -25,6 +25,7 @@ from UM.Settings.DefinitionContainer import DefinitionContainer
 from UM.Settings.ContainerRegistry import ContainerRegistry
 from UM.Logger import Logger
 
+
 def is_begin_layer_line(line: str) -> bool:
     """Check if current line is the start of a layer section.
 
@@ -35,7 +36,8 @@ def is_begin_layer_line(line: str) -> bool:
         bool: True if the line is the start of a layer section
     """
     return line.startswith(";LAYER:")
-  
+
+
 def is_z_line(line: str) -> bool:
     """Check if current line is a Z line
 
@@ -46,7 +48,8 @@ def is_z_line(line: str) -> bool:
         bool: True if the line is a Z line segment
     """
     return "G0" in line and "Z" in line and not "E" in line
-        
+
+
 class FastBottomInfill(Extension):
     def __init__(self):
         super().__init__()
@@ -65,6 +68,19 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
+        self._settings_dict["fbi0_speed"] = {
+            "label": "Initial Layer Infill Speed",
+            "description": "Initial Layer Infill Speed.",
+            "type": "float",
+            "unit": "mm/s",
+            "default_value": 50,
+            "minimum_value": "10",
+            "maximum_value_warning": "200",
+            "enabled": "fbi_enable",
+            "settable_per_mesh": False,
+            "settable_per_extruder": False,
+            "settable_per_meshgroup": False
+        }
         self._settings_dict["fbi_speed"] = {
             "label": "Bottom Layers Infill Speed",
             "description": "Bottom Layers Infill Speed.",
@@ -78,10 +94,10 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        ContainerRegistry.getInstance().containerLoadComplete.connect(self._onContainerLoadComplete)
+        ContainerRegistry.getInstance().containerLoadComplete.connect(
+            self._onContainerLoadComplete)
 
         self._application.getOutputDeviceManager().writeStarted.connect(self._filterGcode)
-
 
     def _onContainerLoadComplete(self, container_id):
         if not ContainerRegistry.getInstance().isLoaded(container_id):
@@ -89,7 +105,8 @@ class FastBottomInfill(Extension):
             return
 
         try:
-            container = ContainerRegistry.getInstance().findContainers(id = container_id)[0]
+            container = ContainerRegistry.getInstance(
+            ).findContainers(id=container_id)[0]
 
         except IndexError:
             # the container no longer exists
@@ -103,24 +120,27 @@ class FastBottomInfill(Extension):
             return
 
         speed_category = container.findDefinitions(key="speed")
-        fbi_enable = container.findDefinitions(key=list(self._settings_dict.keys())[0])
-        fbi_speed = container.findDefinitions(key=list(self._settings_dict.keys())[1])
+        fbi_enable = container.findDefinitions(
+            key=list(self._settings_dict.keys())[0])
+        fbi0_speed = container.findDefinitions(
+            key=list(self._settings_dict.keys())[1])
+        fbi_speed = container.findDefinitions(
+            key=list(self._settings_dict.keys())[2])
         # slowz_height = container.findDefinitions(key=list(self._settings_dict.keys())[2])
-        slowz_height = 1000 # MG
-        
-        
-        if speed_category and not fbi_speed:            
+
+        if speed_category and not fbi_speed:
             speed_category = speed_category[0]
             for setting_key, setting_dict in self._settings_dict.items():
 
-                definition = SettingDefinition(setting_key, container, speed_category, self._i18n_catalog)
+                definition = SettingDefinition(
+                    setting_key, container, speed_category, self._i18n_catalog)
                 definition.deserialize(setting_dict)
 
                 # add the setting to the already existing platform adhesion setting definition
                 speed_category._children.append(definition)
                 container._definition_cache[setting_key] = definition
                 container._updateRelations(definition)
-    
+
     def _filterGcode(self, output_device):
         scene = self._application.getController().getScene()
 
@@ -129,38 +149,36 @@ class FastBottomInfill(Extension):
             return
 
         # get setting from Cura
+        fbi0_speed = global_container_stack.getProperty("fbi0_speed", "value")
         fbi_speed = global_container_stack.getProperty("fbi_speed", "value")
-        # slowz_height = global_container_stack.getProperty("slowz_height", "value")
-        slowz_height = 1000 # MG
         fbi_enable = global_container_stack.getProperty("fbi_enable", "value")
-        
-        if fbi_speed <= 0:
+
+        if fbi_speed <= 0 or fbi0_speed <= 0:
             return
 
         if not fbi_enable:
-            return        
-        
-        
+            return
+
         gcode_dict = getattr(scene, "gcode_dict", {})
-        if not gcode_dict: # this also checks for an empty dict
+        if not gcode_dict:  # this also checks for an empty dict
             Logger.log("w", "Scene has no gcode to process")
             return
 
         dict_changed = False
-        
-        speed_value = 100 # start at 100% speed
+
         for plate_id in gcode_dict:
             gcode_list = gcode_dict[plate_id]
             if len(gcode_list) < 2:
-                Logger.log("w", "G-Code %s does not contain any layers", plate_id)
+                Logger.log(
+                    "w", "G-Code %s does not contain any layers", plate_id)
                 continue
-            
+
             if ";FAST_BOTTOM_INFILL\n" not in gcode_list[0]:
-                layercount=0
-                currentlayer=0
-                idl=0 # Start
-                doPatch=0
-                addedLines = 0
+                layercount = 0
+                currentlayer = 0
+                idl = 0  # Start
+                doPatch = 0
+                doPatch0 = 0
                 if ";LAYER_COUNT:" in gcode_list[1]:
                     if ";LAYER:0\n" in gcode_list[1]:
                         # layer 0 somehow got appended to the start gcode chunk
@@ -168,44 +186,57 @@ class FastBottomInfill(Extension):
                         chunks = gcode_list[1].split(";LAYER:0\n")
                         gcode_list[1] = chunks[0]
                         gcode_list.insert(2, ";LAYER:0\n" + chunks[1])
-                        
-                    #finding layercount                    
-                    flines = gcode_list[1].split("\n")
-                    Logger.log("w", "gcode_list %d", len(gcode_list))
-                    for (fline_nr, fline) in enumerate(flines):
-                        if fline.startswith(";LAYER_COUNT:"):
-                            Logger.log("w", "found LAYER_COUNT %s", fline[13:])
-                            layercount=float(fline[13:])
-                    Logger.log("w", "layercount %f", layercount)
-                    #go through each layer
-                    for i in range(len(gcode_list)):                    
+
+                    # flines = gcode_list[1].split("\n")
+                    # Logger.log("w", "gcode_list %d", len(gcode_list))
+                    # for (fline_nr, fline) in enumerate(flines):
+                    #     if fline.startswith(";LAYER_COUNT:"):
+                    #         Logger.log("w", "found LAYER_COUNT %s", fline[13:])
+                    #         layercount=float(fline[13:])
+                    # Logger.log("w", "layercount %f", layercount)
+                    # go through each layer
+                    for i in range(len(gcode_list)):
                         lines = gcode_list[i].split("\n")
                         for (line_nr, line) in enumerate(lines):
-                           
+
                             if idl == 0 and line.startswith(";LAYER:1"):
-                                idl=1 
+                                idl = 1
 
                             if idl == 1 and line.startswith(";TYPE:FILL"):
-                                idl=2
+                                idl = 2
 
-                            if idl == 1 :
+                            if idl == 0:
                                 if line.startswith(";TYPE:SKIN"):
-                                    doPatch=1
+                                    doPatch0 = 1
+                                elif line.startswith(";TYPE:"):
+                                    doPatch0 = 0
+
+                                if doPatch0 == 1:
+                                    if line.startswith("G1 F"):
+                                        res = re.sub(
+                                            'G1 F[0-9]+', 'G1 F'+str(fbi0_speed * 60), line)
+                                        lines[line_nr] = res
+
+                            if idl == 1:
+                                if line.startswith(";TYPE:SKIN"):
+                                    doPatch = 1
                                     lines
                                 elif line.startswith(";TYPE:"):
-                                    doPatch=0
+                                    doPatch = 0
 
-                            if doPatch == 1 :
-                                if line.startswith("G1 F") :
-                                    res = re.sub('G1 F[0-9]+', 'G1 F9999', line) 
-                                    lines[line_nr] = res   
+                                if doPatch == 1:
+                                    if line.startswith("G1 F"):
+                                        res = re.sub(
+                                            'G1 F[0-9]+', 'G1 F'+str(fbi_speed * 60), line)
+                                        lines[line_nr] = res
 
                         gcode_list[i] = "\n".join(lines)
                     gcode_list[0] += ";FAST_BOTTOM_INFILL\n"
                     gcode_dict[plate_id] = gcode_list
                     dict_changed = True
             else:
-                Logger.log("d", "G-Code %s has already been processed", plate_id)
+                Logger.log(
+                    "d", "G-Code %s has already been processed", plate_id)
                 continue
 
         if dict_changed:
