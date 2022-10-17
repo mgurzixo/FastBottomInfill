@@ -68,7 +68,7 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        self._settings_dict["fbi0Speed"] = {
+        self._settings_dict["fbi0_speed"] = {
             "label": "Initial Layer Infill Speed",
             "description": "Initial Layer Infill Speed.",
             "type": "float",
@@ -81,7 +81,7 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        self._settings_dict["wbi0Speed"] = {
+        self._settings_dict["wbi0_speed"] = {
             "label": "Initial Layer Wall Speed",
             "description": "Initial Layer Wall Speed.",
             "type": "float",
@@ -94,7 +94,7 @@ class FastBottomInfill(Extension):
             "settable_per_extruder": False,
             "settable_per_meshgroup": False
         }
-        self._settings_dict["fbiSpeed"] = {
+        self._settings_dict["fbi_speed"] = {
             "label": "Bottom Layers Infill Speed",
             "description": "Bottom Layers Infill Speed.",
             "type": "float",
@@ -163,9 +163,9 @@ class FastBottomInfill(Extension):
             return
 
         # get setting from Cura
-        fbi0Speed = global_container_stack.getProperty("fbi0Speed", "value")
-        wbi0Speed = global_container_stack.getProperty("wbi0Speed", "value")
-        fbiSpeed = global_container_stack.getProperty("fbiSpeed", "value")
+        fbi0Speed = global_container_stack.getProperty("fbi0_speed", "value")
+        wbi0Speed = global_container_stack.getProperty("wbi0_speed", "value")
+        fbiSpeed = global_container_stack.getProperty("fbi_speed", "value")
         fbi_enable = global_container_stack.getProperty("fbi_enable", "value")
 
         if not fbi_enable:
