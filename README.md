@@ -21,4 +21,4 @@ If you enter a speed of 0 in an option, this particular option becomes disabled.
 
 ## Installation
 
-Create the directory "FastBottomInfill" in the plugins directory of Cura (Linux: ~/.local/share/cura/5.2/plugins), and put the contents there (so for example you will have ~/.local/share/cura/5.2/plugins/FastBottomInfill/FastBottomInfill/README.md) and restart Cura.
+Create the directory "FastBottomInfill" in the plugins directory of Cura (Linux: ~/.local/share/cura/5.2/plugins), and put the contents there (so for example you will have ~/.local/share/cura/5.2/plugins/FastBottomInfill/README.md) and restart Cura.
